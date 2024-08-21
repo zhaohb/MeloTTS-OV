@@ -885,7 +885,7 @@ class SynthesizerTrn(nn.Module):
         self.use_vc = use_vc
 
 
-    def forward(self, x, x_lengths, y, y_lengths, sid, tone, language, bert, ja_bert):
+    def infer(self, x, x_lengths, y, y_lengths, sid, tone, language, bert, ja_bert):
         if self.n_speakers > 0:
             g = self.emb_g(sid).unsqueeze(-1)  # [b, h, 1]
         else:
@@ -963,7 +963,7 @@ class SynthesizerTrn(nn.Module):
             (x, logw, logw_),
         )
 
-    def infer(
+    def forward(
         self,
         x,
         x_lengths,

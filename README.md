@@ -3,6 +3,9 @@
   <img src="logo.png" width="300"/> 
 </div>
 
+<details>
+  <summary>Click here to expand/collapse content</summary>
+  <ul>
 ## Introduction
 MeloTTS is a **high-quality multi-lingual** text-to-speech library by [MIT](https://www.mit.edu/) and [MyShell.ai](https://myshell.ai). Supported languages include:
 
@@ -65,3 +68,38 @@ This library is under MIT License, which means it is free for both commercial an
 ## Acknowledgements
 
 This implementation is based on [TTS](https://github.com/coqui-ai/TTS), [VITS](https://github.com/jaywalnut310/vits), [VITS2](https://github.com/daniilrobnikov/vits2) and [Bert-VITS2](https://github.com/fishaudio/Bert-VITS2). We appreciate their awesome work.
+
+  </ul>
+</details>
+
+## Update Notes
+### 2024/08/21
+1. MeloTTS model supports using openvino to accelerate the inference process. Currently only verified on Linux system.
+
+### Convert MeloTTS model to OpenVINO™ IR(Intermediate Representation) and testing:
+```shell
+python3  test_tts.py
+```
+### Todo:
+1. Now the input will be split and processed serially. This can be optimized to use openvino asynchronous inference, like this:
+```python
+  ...
+    self.tts_model = self.core.read_model(Path(ov_model_path))
+    self.tts_compiled_model = self.core.compile_model(self.tts_model, 'CPU')
+    self.tts_request_0 = self.tts_compiled_model.create_infer_request()
+    self.tts_request_1 = self.tts_compiled_model.create_infer_request()
+  ...
+    for index, t in enumerate(texts):
+      ...
+        if index == 0:
+          self.tts_request_0.start_async(inputs_dict, share_inputs=True)
+        elif index ==1 :
+          self.tts_request_1.start_async(inputs_dict, share_inputs=True)
+      ...
+    self.tts_request_0.wait()
+    self.tts_request_1.wait()
+  ...
+2. Add model quantization function
+
+```
+
