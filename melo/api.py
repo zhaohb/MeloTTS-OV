@@ -149,7 +149,7 @@ class TTS(nn.Module):
             
             self.tts_request.start_async(inputs_dict, share_inputs=True)
             self.tts_request.wait()
-            audio = (self.tts_request.get_tensor("audio").data)[0][0]
+            audio = (self.tts_request.get_tensor("audio").data.copy())[0][0]
 
             return audio
 

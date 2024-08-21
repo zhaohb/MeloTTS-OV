@@ -36,5 +36,6 @@ for i in range(loop_num):
     dur_time = (end - start) * 1000
     dur_time_list.append(dur_time)
 
-avg_lantecy = sum(dur_time_list[1:]) / (len(dur_time_list) - 1)
-print(f"MeloTTS model e2e avg latency: {avg_lantecy:.2f} ms")
+if loop_num > 1:
+    avg_lantecy = sum(dur_time_list[1:]) / (len(dur_time_list) - 1)
+    print(f"MeloTTS model e2e avg latency: {avg_lantecy:.2f} ms")
