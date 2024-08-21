@@ -99,7 +99,6 @@ python3  test_tts.py
     self.tts_request_0.wait()
     self.tts_request_1.wait()
   ...
-2. Add model quantization function
-
 ```
+2. Add model quantization function
 
