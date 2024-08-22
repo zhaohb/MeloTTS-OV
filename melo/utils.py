@@ -32,7 +32,7 @@ def get_ov_bert_feature(text, word2ph, bert_model=None):
     phone_level_feature = torch.cat(phone_level_feature, dim=0)
     return phone_level_feature.T
 
-def get_text_for_tts_infer(text, language_str, hps, device, symbol_to_id=None, bert_model=None):
+def get_text_for_tts_infer(text, language_str, hps, device, symbol_to_id=None, bert_model=None, use_ov=False):
     norm_text, phone, tone, word2ph = clean_text(text, language_str)
     phone, tone, language = cleaned_text_to_sequence(phone, tone, language_str, symbol_to_id)
 
@@ -48,7 +48,10 @@ def get_text_for_tts_infer(text, language_str, hps, device, symbol_to_id=None, b
         bert = torch.zeros(1024, len(phone))
         ja_bert = torch.zeros(768, len(phone))
     else:
-        bert = get_ov_bert_feature(text, word2ph, bert_model)
+        if use_ov:
+            bert = get_ov_bert_feature(norm_text, word2ph, bert_model)
+        else:
+            bert = get_bert(norm_text, word2ph, language_str, device)
         del word2ph
         assert bert.shape[-1] == len(phone), phone
 
