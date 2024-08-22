@@ -128,6 +128,18 @@ class TTS(nn.Module):
         outputs_name = ['audio']
         for output, output_name in zip(ov_model.outputs, outputs_name):
             output.get_tensor().set_names({output_name})
+        
+        """
+        reshape model
+        Set the batch size of all input tensors to 1 to facilitate the use of the C++ infer
+        If you are only using the Python pipeline, this step can be omitted.
+        """   
+        shapes = {}     
+        for input_layer  in ov_model.inputs:
+            shapes[input_layer] = input_layer.partial_shape
+            shapes[input_layer][0] = 1
+        ov_model.reshape(shapes)
+
         ov.save_model(ov_model, Path(ov_model_path))
 
     def ov_model_init(self, ov_path=None):
