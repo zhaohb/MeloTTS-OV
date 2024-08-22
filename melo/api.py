@@ -120,6 +120,11 @@ class TTS(nn.Module):
                 "sdp_ratio": sdp_ratio,
             },
         )
+        get_input_names = lambda: ["phones", "phones_length", "speakers",
+                                  "tones", "lang_ids", "bert", "ja_bert",
+                                  "noise_scale", "length_scale", "noise_scale_w", "sdp_ratio"]
+        for input, input_name in zip(ov_model.inputs, get_input_names()):
+            input.get_tensor().set_names({input_name})
         outputs_name = ['audio']
         for output, output_name in zip(ov_model.outputs, outputs_name):
             output.get_tensor().set_names({output_name})
@@ -135,11 +140,11 @@ class TTS(nn.Module):
 
     def ov_infer(self, x_tst=None, x_tst_lengths=None, speakers=None, tones=None, lang_ids=None, bert=None, ja_bert=None, sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0):
             inputs_dict = {}
-            inputs_dict['x'] = x_tst
-            inputs_dict['x_lengths'] = x_tst_lengths
-            inputs_dict['sid'] = speakers
-            inputs_dict['tone'] = tones
-            inputs_dict['language'] = lang_ids
+            inputs_dict['phones'] = x_tst
+            inputs_dict['phones_length'] = x_tst_lengths
+            inputs_dict['speakers'] = speakers
+            inputs_dict['tones'] = tones
+            inputs_dict['lang_ids'] = lang_ids
             inputs_dict['bert'] = bert
             inputs_dict['ja_bert'] = ja_bert
             inputs_dict['noise_scale'] = torch.tensor([noise_scale])
