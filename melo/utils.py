@@ -17,9 +17,22 @@ MATPLOTLIB_FLAG = False
 
 logger = logging.getLogger(__name__)
 
+def get_ov_bert_feature(text, word2ph, bert_model=None):
+    inputs = bert_model.bert_tokenizer(text, return_tensors="pt")
+    res = bert_model.ov_bert_infer(input_ids=inputs['input_ids'], token_type_ids=inputs['token_type_ids'], attention_mask=inputs['attention_mask'])
+    res = torch.tensor(res[-3:-2][0][0])
+    # import pdb; pdb.set_trace()
+    # assert len(word2ph) == len(text) + 2
+    word2phone = word2ph
+    phone_level_feature = []
+    for i in range(len(word2phone)):
+        repeat_feature = res[i].repeat(word2phone[i], 1)
+        phone_level_feature.append(repeat_feature)
 
+    phone_level_feature = torch.cat(phone_level_feature, dim=0)
+    return phone_level_feature.T
 
-def get_text_for_tts_infer(text, language_str, hps, device, symbol_to_id=None):
+def get_text_for_tts_infer(text, language_str, hps, device, symbol_to_id=None, bert_model=None):
     norm_text, phone, tone, word2ph = clean_text(text, language_str)
     phone, tone, language = cleaned_text_to_sequence(phone, tone, language_str, symbol_to_id)
 
@@ -35,7 +48,7 @@ def get_text_for_tts_infer(text, language_str, hps, device, symbol_to_id=None):
         bert = torch.zeros(1024, len(phone))
         ja_bert = torch.zeros(768, len(phone))
     else:
-        bert = get_bert(norm_text, word2ph, language_str, device)
+        bert = get_ov_bert_feature(text, word2ph, bert_model)
         del word2ph
         assert bert.shape[-1] == len(phone), phone
 

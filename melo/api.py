@@ -18,7 +18,105 @@ from .mel_processing import spectrogram_torch, spectrogram_torch_conv
 from .download_utils import load_or_download_config, load_or_download_model
 import openvino as ov
 from pathlib import Path
+from transformers import AutoTokenizer, AutoModelForMaskedLM, AutoConfig, PreTrainedModel
+from transformers.onnx import FeaturesManager
+import transformers
 
+class ExportModel(PreTrainedModel):
+    def __init__(self, base_model, config):
+        super().__init__(config)
+        self.model = base_model
+
+    def forward(self, input_ids=None,
+        attention_mask=None,
+        token_type_ids=None,
+        head_mask=None,
+        inputs_embeds=None,
+        output_attentions=None,
+        output_hidden_states=None,
+        return_dict=None,):
+
+        out = self.model(input_ids, attention_mask, token_type_ids, output_hidden_states=True)
+        return {
+            "logits": out["logits"],
+            "hidden_states": torch.stack(list(out["hidden_states"]))
+        }
+
+class Bert():
+    def __init__(self):
+        pass
+    
+    def save_tokenizer(self, tokenizer, out_dir):
+        try:
+            tokenizer.save_pretrained(out_dir)
+        except Exception as e:
+            log.error(f'tokenizer loading failed with {e}')
+            
+    def bert_convert_to_ov(self, ov_path):
+        model_id='bert-base-multilingual-uncased'
+        models = AutoModelForMaskedLM.from_pretrained(model_id)
+        tokenizers = AutoTokenizer.from_pretrained(model_id)
+        config = AutoConfig.from_pretrained(model_id)
+        
+        export_model = ExportModel(models, config)
+        
+        text = "当需要把翻译对象表示, 可以使用这个方法。"
+        inputs = tokenizers(text, return_tensors="pt")
+
+        ov_model = ov.convert_model(
+            export_model,
+            example_input = {
+                "input_ids": inputs['input_ids'],
+                "token_type_ids": inputs['token_type_ids'],
+                "attention_mask": inputs['attention_mask'],
+            },
+        )
+        
+        get_input_names = lambda: ["input_ids", "token_type_ids", "attention_mask"]
+        for input, input_name in zip(ov_model.inputs, get_input_names()):
+            input.get_tensor().set_names({input_name})
+        outputs_name = ['logits', 'hidden_states']
+        breakpoint()
+        for output, output_name in zip(ov_model.outputs, outputs_name):
+            output.get_tensor().set_names({output_name})
+        
+        """
+        reshape model
+        Set the batch size of all input tensors to 1 to facilitate the use of the C++ infer
+        If you are only using the Python pipeline, this step can be omitted.
+        """   
+        shapes = {}     
+        for input_layer  in ov_model.inputs:
+            shapes[input_layer] = input_layer.partial_shape
+            shapes[input_layer][0] = 1
+        ov_model.reshape(shapes)
+
+        self.save_tokenizer(tokenizers, Path(ov_path))
+        models.config.save_pretrained(Path(ov_path))
+        
+        ov_model_path = Path(f"{ov_path}/bert.xml")
+        ov.save_model(ov_model, Path(ov_model_path))
+        
+    def ov_bert_model_init(self, ov_path=None):
+        core = ov.Core()
+        self.bert_model = core.read_model(Path(f"{ov_path}/bert.xml"))
+        self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
+        self.bert_request = self.bert_compiled_model.create_infer_request()
+                
+        self.bert_tokenizer = AutoTokenizer.from_pretrained(ov_path, trust_remote_code=True)
+        self.bert_config = AutoConfig.from_pretrained(ov_path, trust_remote_code=True)
+        
+    def ov_bert_infer(self, input_ids=None, token_type_ids=None, attention_mask=None):
+        inputs_dict = {}
+        inputs_dict['input_ids'] = input_ids
+        inputs_dict['token_type_ids'] = token_type_ids
+        inputs_dict['attention_mask'] = attention_mask
+        
+        self.bert_request.start_async(inputs_dict, share_inputs=True)
+        self.bert_request.wait()
+        bert_output = (self.bert_request.get_tensor("hidden_states").data.copy())
+
+        return bert_output
 class TTS(nn.Module):
     def __init__(self, 
                 language,
@@ -63,6 +161,8 @@ class TTS(nn.Module):
         
         language = language.split('_')[0]
         self.language = 'ZH_MIX_EN' if language == 'ZH' else language # we support a ZH_MIX_EN model
+        
+        self.bert_model = Bert()
 
     @staticmethod
     def audio_numpy_concat(segment_data_list, sr, speed=1.):
@@ -81,8 +181,10 @@ class TTS(nn.Module):
             print('\n'.join(texts))
             print(" > ===========================")
         return texts
-    
+        
     def tts_convert_to_ov(self, ov_path, sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0,):
+        self.bert_model.bert_convert_to_ov(ov_path)
+        
         ov_model_path = Path(f"{ov_path}/tts.xml")
 
         x_tst = torch.tensor([[  0,   0,   0,  97,   0,  65,   0, 100,   0,  89,   0,  55,   0,  49,
@@ -143,6 +245,8 @@ class TTS(nn.Module):
         ov.save_model(ov_model, Path(ov_model_path))
 
     def ov_model_init(self, ov_path=None):
+        self.bert_model.ov_bert_model_init(ov_path)
+        
         self.core = ov.Core()
         ov_model_path = Path(f"{ov_path}/tts.xml")
 
@@ -187,7 +291,7 @@ class TTS(nn.Module):
             if language in ['EN', 'ZH_MIX_EN']:
                 t = re.sub(r'([a-z])([A-Z])', r'\1 \2', t)
             device = self.device
-            bert, ja_bert, phones, tones, lang_ids = utils.get_text_for_tts_infer(t, language, self.hps, device, self.symbol_to_id)
+            bert, ja_bert, phones, tones, lang_ids = utils.get_text_for_tts_infer(t, language, self.hps, device, symbol_to_id=self.symbol_to_id, bert_model=self.bert_model)
             with torch.no_grad():
                 x_tst = phones.to(device).unsqueeze(0)
                 tones = tones.to(device).unsqueeze(0)
