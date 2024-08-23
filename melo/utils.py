@@ -20,7 +20,8 @@ logger = logging.getLogger(__name__)
 def get_ov_bert_feature(text, word2ph, bert_model=None):
     inputs = bert_model.bert_tokenizer(text, return_tensors="pt")
     res = bert_model.ov_bert_infer(input_ids=inputs['input_ids'], token_type_ids=inputs['token_type_ids'], attention_mask=inputs['attention_mask'])
-    res = torch.tensor(res[-3:-2][0][0])
+    res = torch.tensor(res)
+    # res = torch.tensor(res[-3:-2][0][0])
     # import pdb; pdb.set_trace()
     # assert len(word2ph) == len(text) + 2
     word2phone = word2ph

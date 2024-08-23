@@ -38,8 +38,9 @@ class ExportModel(PreTrainedModel):
 
         out = self.model(input_ids, attention_mask, token_type_ids, output_hidden_states=True)
         return {
-            "logits": out["logits"],
-            "hidden_states": torch.stack(list(out["hidden_states"]))
+            # "logits": out["logits"],
+            # "hidden_states": torch.stack(list(out["hidden_states"]))
+            "hidden_states": torch.cat(out["hidden_states"][-3:-2], -1)[0]
         }
 
 class Bert():
@@ -75,8 +76,7 @@ class Bert():
         get_input_names = lambda: ["input_ids", "token_type_ids", "attention_mask"]
         for input, input_name in zip(ov_model.inputs, get_input_names()):
             input.get_tensor().set_names({input_name})
-        outputs_name = ['logits', 'hidden_states']
-        breakpoint()
+        outputs_name = ['hidden_states']
         for output, output_name in zip(ov_model.outputs, outputs_name):
             output.get_tensor().set_names({output_name})
         
