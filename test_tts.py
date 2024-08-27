@@ -6,11 +6,12 @@ import time
 speed = 1.0
 device = 'cpu' # or cuda:0
 
+use_ov = True  ## Used to control whether to use torch or openvino
+use_int8 = True
 text = "我最近在学习machine learning，希望能够在未来的artificial intelligence领域有所建树。"
-model = TTS(language='ZH', device=device)
+model = TTS(language='ZH', device=device, use_int8=True)
 speaker_ids = model.hps.data.spk2id
 
-use_ov = True  ## Used to control whether to use torch or openvino
 
 dur_time_list = []
 loop_num = 10
@@ -30,7 +31,7 @@ for i in range(loop_num):
     else:
         output_path = 'zh_ov.wav'
         start = time.perf_counter()
-        model.tts_to_file(text, speaker_ids['ZH'], output_path, speed=speed, use_ov=use_ov)
+        model.tts_to_file(text, speaker_ids['ZH'], output_path, speed=speed, use_ov=use_ov, noise_scale=0.1, noise_scale_w=0.8)
         end = time.perf_counter()
 
     dur_time = (end - start) * 1000
