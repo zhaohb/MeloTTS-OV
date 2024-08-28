@@ -47,15 +47,49 @@ class ExportModel(PreTrainedModel):
         }
 
 class Bert():
-    def __init__(self):
-        pass
+    def __init__(self, use_int8=False):
+        self.use_int8=use_int8
     
     def save_tokenizer(self, tokenizer, out_dir):
         try:
             tokenizer.save_pretrained(out_dir)
         except Exception as e:
             log.error(f'tokenizer loading failed with {e}')
-            
+
+    def prepare_calibration_data(self, dataloader, init_steps):
+        data = []
+        for batch in dataloader:
+            if len(data) == init_steps:
+                break
+            if batch is not None:
+                with torch.no_grad():
+                    inputs_dict = {}
+                    inputs_dict['input_ids'] = batch['input_ids'].squeeze(0)
+                    inputs_dict['token_type_ids'] = batch['token_type_ids'].squeeze(0)
+                    inputs_dict['attention_mask'] = batch['attention_mask'].squeeze(0)
+                    data.append(inputs_dict)
+        return data
+
+    def prepare_dataset(self, example_input=None, opt_init_steps=1, max_train_samples=1000):
+        class CustomDataset(Dataset):
+            def __init__(self, data_count=100, dummy_data=None):
+                self.dataset = []
+                for i in range(data_count):
+                    self.dataset.append(dummy_data)
+            def __len__(self):
+                return len(self.dataset)
+
+            def __getitem__(self,idx):
+                data = self.dataset[idx]
+                return data
+        """
+        Prepares a vision-text dataset for quantization.
+        """
+        dataset = CustomDataset(data_count=1, dummy_data=example_input)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=8, pin_memory=True)
+        calibration_data = self.prepare_calibration_data(dataloader, opt_init_steps)
+        return calibration_data
+
     def bert_convert_to_ov(self, ov_path):
         model_id='bert-base-multilingual-uncased'
         models = AutoModelForMaskedLM.from_pretrained(model_id)
@@ -67,13 +101,15 @@ class Bert():
         text = "当需要把翻译对象表示, 可以使用这个方法。"
         inputs = tokenizers(text, return_tensors="pt")
 
-        ov_model = ov.convert_model(
-            export_model,
-            example_input = {
+        example_input = {
                 "input_ids": inputs['input_ids'],
                 "token_type_ids": inputs['token_type_ids'],
                 "attention_mask": inputs['attention_mask'],
-            },
+            }
+            
+        ov_model = ov.convert_model(
+            export_model,
+            example_input = example_input,
         )
         
         get_input_names = lambda: ["input_ids", "token_type_ids", "attention_mask"]
@@ -100,9 +136,32 @@ class Bert():
         ov_model_path = Path(f"{ov_path}/bert.xml")
         ov.save_model(ov_model, Path(ov_model_path))
         
+        if self.use_int8:
+            calibration_data = self.prepare_dataset(example_input=example_input)
+            calibration_dataset = nncf.Dataset(calibration_data)
+            # quantized_model = nncf.quantize(
+            #     model=ov_model,
+            #     calibration_dataset=calibration_dataset,
+            #     preset=nncf.QuantizationPreset.MIXED,
+            #     # subset_size=len(calibration_data),
+            #     )
+            quantized_model = nncf.quantize(
+                model=ov_model,
+                calibration_dataset=calibration_dataset,
+                model_type=nncf.ModelType.TRANSFORMER,
+                subset_size=len(calibration_data),
+                # Smooth Quant algorithm reduces activation quantization error; optimal alpha value was obtained through grid search
+                advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
+            )
+
+            ov.save_model(quantized_model, Path(f"{ov_path}/bert_int8.xml"))
+        
     def ov_bert_model_init(self, ov_path=None):
         core = ov.Core()
-        self.bert_model = core.read_model(Path(f"{ov_path}/bert.xml"))
+        if self.use_int8:
+            self.bert_model = Path(f"{ov_path}/bert_int8.xml")
+        else:
+            self.bert_model = Path(f"{ov_path}/bert.xml")
         self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
         self.bert_request = self.bert_compiled_model.create_infer_request()
                 
@@ -166,7 +225,7 @@ class TTS(nn.Module):
         language = language.split('_')[0]
         self.language = 'ZH_MIX_EN' if language == 'ZH' else language # we support a ZH_MIX_EN model
         
-        self.bert_model = Bert()
+        self.bert_model = Bert(use_int8=use_int8)
         self.use_int8 =use_int8
 
     @staticmethod
