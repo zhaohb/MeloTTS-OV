@@ -17,7 +17,7 @@ dur_time_list = []
 loop_num = 10
 
 if use_ov:
-    ov_path = "/home/hongbo/tts/tts_ov"
+    ov_path = "/tts_ov"
     if not Path(ov_path).exists():
         model.tts_convert_to_ov(ov_path)
     model.ov_model_init(ov_path)
