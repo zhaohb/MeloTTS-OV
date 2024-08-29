@@ -162,7 +162,7 @@ class Bert():
             ov_model_path = Path(f"{ov_path}/bert_int8.xml")
         else:
             ov_model_path = Path(f"{ov_path}/bert.xml")
-        self.bert_model = self.core.read_model(Path(ov_model_path))
+        self.bert_model = core.read_model(Path(ov_model_path))
         self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
         self.bert_request = self.bert_compiled_model.create_infer_request()
                 
