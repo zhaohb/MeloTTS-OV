@@ -138,7 +138,7 @@ class Bert():
         self.save_tokenizer(tokenizers, Path(ov_path))
         models.config.save_pretrained(Path(ov_path))
         
-        ov_model_path = Path(f"{ov_path}/bert_{language}xml")
+        ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
         ov.save_model(ov_model, Path(ov_model_path))
         
         if self.use_int8:
@@ -159,14 +159,14 @@ class Bert():
                 advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
             )
 
-            ov.save_model(quantized_model, Path(f"{ov_path}/bert_{language}xml"))
+            ov.save_model(quantized_model, Path(f"{ov_path}/bert_{language}.xml"))
         
-    def ov_bert_model_init(self, ov_path=None):
+    def ov_bert_model_init(self, ov_path=None, language = "ZH"):
         core = ov.Core()
         if self.use_int8:
-            ov_model_path = Path(f"{ov_path}/bert_{language}xml")
+            ov_model_path = Path(f"{ov_path}/bert_{language}_int8.xml")
         else:
-            ov_model_path = Path(f"{ov_path}/bert_{language}xml")
+            ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
         self.bert_model = core.read_model(Path(ov_model_path))
         self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
         self.bert_request = self.bert_compiled_model.create_infer_request()
@@ -385,7 +385,7 @@ class TTS(nn.Module):
             ov.save_model(quantized_model, Path(f"{ov_path}/tts_int8.xml"))
 
     def ov_model_init(self, ov_path=None, language = "ZH"):
-        self.bert_model.ov_bert_model_init(ov_path)
+        self.bert_model.ov_bert_model_init(ov_path, language=language)
         
         self.core = ov.Core()
         if self.use_int8:
