@@ -90,15 +90,20 @@ class Bert():
         calibration_data = self.prepare_calibration_data(dataloader, opt_init_steps)
         return calibration_data
 
-    def bert_convert_to_ov(self, ov_path):
-        model_id='bert-base-multilingual-uncased'
+    def bert_convert_to_ov(self, ov_path, language = "ZH"):
+        if "ZH" in language:
+            model_id='bert-base-multilingual-uncased'
+            text = "当需要把翻译对象表示, 可以使用这个方法。"
+        elif "EN" in language:
+            model_id='bert-base-uncased'
+            text = "A buffer is a container for data that can be accessed from a device and the host."
         models = AutoModelForMaskedLM.from_pretrained(model_id)
         tokenizers = AutoTokenizer.from_pretrained(model_id)
         config = AutoConfig.from_pretrained(model_id)
         
         export_model = ExportModel(models, config)
         
-        text = "当需要把翻译对象表示, 可以使用这个方法。"
+
         inputs = tokenizers(text, return_tensors="pt")
 
         example_input = {
@@ -133,7 +138,7 @@ class Bert():
         self.save_tokenizer(tokenizers, Path(ov_path))
         models.config.save_pretrained(Path(ov_path))
         
-        ov_model_path = Path(f"{ov_path}/bert.xml")
+        ov_model_path = Path(f"{ov_path}/bert_{language}xml")
         ov.save_model(ov_model, Path(ov_model_path))
         
         if self.use_int8:
@@ -154,14 +159,14 @@ class Bert():
                 advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
             )
 
-            ov.save_model(quantized_model, Path(f"{ov_path}/bert_int8.xml"))
+            ov.save_model(quantized_model, Path(f"{ov_path}/bert_{language}xml"))
         
     def ov_bert_model_init(self, ov_path=None):
         core = ov.Core()
         if self.use_int8:
-            ov_model_path = Path(f"{ov_path}/bert_int8.xml")
+            ov_model_path = Path(f"{ov_path}/bert_{language}xml")
         else:
-            ov_model_path = Path(f"{ov_path}/bert.xml")
+            ov_model_path = Path(f"{ov_path}/bert_{language}xml")
         self.bert_model = core.read_model(Path(ov_model_path))
         self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
         self.bert_request = self.bert_compiled_model.create_infer_request()
@@ -257,15 +262,21 @@ class TTS(nn.Module):
                     inputs_dict = {}
                     inputs_dict['phones'] = batch['x'].squeeze(0)
                     inputs_dict['phones_length'] = batch['x_lengths'].squeeze(0)
-                    inputs_dict['speakers'] = batch['sid'].squeeze(0)
+                    
                     inputs_dict['tones'] = batch['tone'].squeeze(0)
                     inputs_dict['lang_ids'] = batch['language'].squeeze(0)
                     inputs_dict['bert'] = batch['bert'].squeeze(0)
                     inputs_dict['ja_bert'] = batch['ja_bert'].squeeze(0)
-                    inputs_dict['noise_scale'] = batch['noise_scale'].squeeze(0)
-                    inputs_dict['length_scale'] = batch['length_scale'].squeeze(0)
-                    inputs_dict['noise_scale_w'] = batch['noise_scale_w'].squeeze(0)
-                    inputs_dict['sdp_ratio'] = batch['sdp_ratio'].squeeze(0)
+                    speakers =1
+                    sdp_ratio=0.2
+                    noise_scale=0.6
+                    noise_scale_w=0.8
+                    speed=1.0
+                    inputs_dict['speakers'] = torch.tensor([speakers])
+                    inputs_dict['noise_scale'] = torch.tensor([noise_scale])
+                    inputs_dict['length_scale'] = torch.tensor([1. / speed])
+                    inputs_dict['noise_scale_w'] = torch.tensor([noise_scale_w])
+                    inputs_dict['sdp_ratio'] = torch.tensor([sdp_ratio])
                     data.append(inputs_dict)
         return data
 
@@ -289,10 +300,10 @@ class TTS(nn.Module):
         calibration_data = self.prepare_calibration_data(dataloader, opt_init_steps)
         return calibration_data
     
-    def tts_convert_to_ov(self, ov_path, sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0,):
-        self.bert_model.bert_convert_to_ov(ov_path)
+    def tts_convert_to_ov(self, ov_path, language = "ZH", sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0,):
+        self.bert_model.bert_convert_to_ov(ov_path, language)
         
-        ov_model_path = Path(f"{ov_path}/tts.xml")
+        ov_model_path = Path(f"{ov_path}/tts_int8_nncf_{language}.xml")
 
         x_tst = torch.tensor([[  0,   0,   0,  97,   0,  65,   0, 100,   0,  89,   0,  55,   0,  49,
            0, 100,   0,  13,   0,  98,   0,  95,   0,  98,   0,  40,   0,  60,
@@ -373,15 +384,15 @@ class TTS(nn.Module):
 
             ov.save_model(quantized_model, Path(f"{ov_path}/tts_int8.xml"))
 
-    def ov_model_init(self, ov_path=None):
+    def ov_model_init(self, ov_path=None, language = "ZH"):
         self.bert_model.ov_bert_model_init(ov_path)
         
         self.core = ov.Core()
         if self.use_int8:
             ov_model_path = Path(f"{ov_path}/tts_int8.xml")
         else:
-            ov_model_path = Path(f"{ov_path}/tts.xml")
-
+            ov_model_path = Path(f"{ov_path}/tts_int8_nncf_{language}.xml")
+        print(f"ov_path : {ov_model_path}")
         self.tts_model = self.core.read_model(Path(ov_model_path))
         self.tts_compiled_model = self.core.compile_model(self.tts_model, 'CPU')
         self.tts_request = self.tts_compiled_model.create_infer_request()
@@ -406,7 +417,7 @@ class TTS(nn.Module):
 
             return audio
 
-    def tts_to_file(self, text, speaker_id, output_path=None, sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0, pbar=None, format=None, position=None, quiet=False, use_ov=False):
+    def tts_to_file(self, text, speaker_id, output_path=None, sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0, pbar=None, format=None, position=None, quiet=False, use_ov=True):
         language = self.language
         texts = self.split_sentences_into_pieces(text, language, quiet)
         audio_list = []
