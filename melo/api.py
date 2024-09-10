@@ -163,10 +163,10 @@ class Bert():
         
     def ov_bert_model_init(self, ov_path=None, language = "ZH"):
         core = ov.Core()
-        if self.use_int8:
-            ov_model_path = Path(f"{ov_path}/bert_{language}_int8.xml")
-        else:
-            ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
+        #if self.use_int8:
+        #    ov_model_path = Path(f"{ov_path}/bert_{language}_int8.xml")
+        #else:
+        ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
         self.bert_model = core.read_model(Path(ov_model_path))
         self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
         self.bert_request = self.bert_compiled_model.create_infer_request()
@@ -389,7 +389,7 @@ class TTS(nn.Module):
         
         self.core = ov.Core()
         if self.use_int8:
-            ov_model_path = Path(f"{ov_path}/tts_int8.xml")
+            ov_model_path = Path(f"{ov_path}/tts_int8_{language}.xml")
         else:
             ov_model_path = Path(f"{ov_path}/tts_{language}.xml")
         print(f"ov_path : {ov_model_path}")
