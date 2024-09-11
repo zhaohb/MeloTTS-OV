@@ -24,10 +24,14 @@ def reshape_for_npu(model, bert_static_shape):
 
 
 def pad_input(input_dict, pad_length=64):
-    def pad_tensor(input_tensor, pad_length):
+    def pad_tensor(input_tensor, pad_length):      
         pad_size = pad_length - input_tensor.shape[1]
         if pad_size > 0:
+            # Pad with zeros on the right side using torch.nn.functional.pad
             return torch.nn.functional.pad(input_tensor, (0, pad_size), 'constant', 0)
+        elif pad_size < 0:
+            # Truncate the input tensor to the specified pad_length
+            return input_tensor[:, :pad_length]
         else:
             return input_tensor
     
