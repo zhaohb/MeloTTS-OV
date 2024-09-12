@@ -78,7 +78,16 @@ This implementation is based on [TTS](https://github.com/coqui-ai/TTS), [VITS](h
 ### 2024/08/28
 1. TTS and Bert model support int8 quantize.
 
-### Convert MeloTTS model to OpenVINO™ IR(Intermediate Representation) and testing:
+## Install MeloTTS with OpenVINO™
+
+```
+pip install -r requirements.txt
+pip install openvino nncf
+python setup.py develop # or  pip install -e .
+python -m unidic download
+```
+
+## Convert MeloTTS model to OpenVINO™ IR(Intermediate Representation) and testing:
 ```shell
 python3  test_tts.py
 ```
