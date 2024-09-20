@@ -8,11 +8,11 @@ from transformers import AutoTokenizer
 import torch
 
 device = 'CPU' # or cuda:0
-language = 'ZH'
-ov_path = f"/tts_ov_{language}"
-ov_model_path = Path(f"{ov_path}/bert_int8.xml")
-ov_model_save_path = Path(f"{ov_path}/bert_static_int8.xml")
-bert_static_shape = [1,64]
+language = 'EN'
+ov_path = f"tts_ov_{language}"
+ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
+ov_model_save_path = Path(f"{ov_path}/bert_static_{language}.xml")
+bert_static_shape = [1,32]
 def reshape_for_npu(model, bert_static_shape):
         # change dynamic shape to static shape
         shapes = dict()
@@ -23,7 +23,7 @@ def reshape_for_npu(model, bert_static_shape):
         print(f"save static model in {Path(ov_model_save_path)}")
 
 
-def pad_input(input_dict, pad_length=64):
+def pad_input(input_dict, pad_length=32):
     def pad_tensor(input_tensor, pad_length):      
         pad_size = pad_length - input_tensor.shape[1]
         if pad_size > 0:
@@ -49,13 +49,13 @@ def test_static_shape(compiled_model,device="NPU"):
             text = "A buffer is a container for data that can be accessed from a device and the host."
     tokenizers = AutoTokenizer.from_pretrained(model_id)
     inputs = tokenizers(text, return_tensors="pt")
-    padded_inputs = pad_input(inputs,pad_length=64)
+    padded_inputs = pad_input(inputs,pad_length=bert_static_shape[1])
    
     infer_request = compiled_model.create_infer_request()
 
     infer_request.infer(padded_inputs)
     res =  infer_request.get_tensor("hidden_states").data.copy()
-    #print(res)
+    print("Test Passed!")
     pass
 
 
