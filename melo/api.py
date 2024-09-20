@@ -24,6 +24,7 @@ import transformers
 from torch.utils.data import Dataset
 from torch.utils.data import DataLoader
 import nncf
+import nltk 
 
 class ExportModel(PreTrainedModel):
     def __init__(self, base_model, config):
@@ -49,6 +50,7 @@ class ExportModel(PreTrainedModel):
 class Bert():
     def __init__(self, use_int8=False):
         self.use_int8=use_int8
+        
     
     def save_tokenizer(self, tokenizer, out_dir):
         try:
@@ -159,14 +161,14 @@ class Bert():
                 advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
             )
 
-            ov.save_model(quantized_model, Path(f"{ov_path}/bert_{language}.xml"))
+            ov.save_model(quantized_model, Path(f"{ov_path}/bert_int8_{language}.xml"))
         
     def ov_bert_model_init(self, ov_path=None, language = "ZH"):
         core = ov.Core()
-        #if self.use_int8:
-        #    ov_model_path = Path(f"{ov_path}/bert_{language}_int8.xml")
-        #else:
-        ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
+        if self.use_int8:
+            ov_model_path = Path(f"{ov_path}/bert_int8_{language}.xml")
+        else:
+            ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
         self.bert_model = core.read_model(Path(ov_model_path))
         self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
         self.bert_request = self.bert_compiled_model.create_infer_request()
@@ -230,6 +232,8 @@ class TTS(nn.Module):
         
         language = language.split('_')[0]
         self.language = 'ZH_MIX_EN' if language == 'ZH' else language # we support a ZH_MIX_EN model
+        if self.language == "EN":
+            nltk.download('averaged_perceptron_tagger_eng')
         
         self.bert_model = Bert(use_int8=use_int8)
         self.use_int8 =use_int8
@@ -303,7 +307,7 @@ class TTS(nn.Module):
     def tts_convert_to_ov(self, ov_path, language = "ZH", sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0,):
         self.bert_model.bert_convert_to_ov(ov_path, language)
         
-        ov_model_path = Path(f"{ov_path}/tts_{language}.xml")
+        
 
         x_tst = torch.tensor([[  0,   0,   0,  97,   0,  65,   0, 100,   0,  89,   0,  55,   0,  49,
            0, 100,   0,  13,   0,  98,   0,  95,   0,  98,   0,  40,   0,  60,
@@ -362,17 +366,12 @@ class TTS(nn.Module):
             shapes[input_layer][0] = 1
         ov_model.reshape(shapes)
 
+        ov_model_path = Path(f"{ov_path}/tts_{language}.xml")
         ov.save_model(ov_model, Path(ov_model_path))
         
         if self.use_int8:
             calibration_data = self.prepare_dataset(example_input=example_input)
             calibration_dataset = nncf.Dataset(calibration_data)
-            # quantized_model = nncf.quantize(
-            #     model=ov_model,
-            #     calibration_dataset=calibration_dataset,
-            #     preset=nncf.QuantizationPreset.MIXED,
-            #     # subset_size=len(calibration_data),
-            #     )
             quantized_model = nncf.quantize(
                 model=ov_model,
                 calibration_dataset=calibration_dataset,
@@ -382,7 +381,7 @@ class TTS(nn.Module):
                 advanced_parameters=nncf.AdvancedQuantizationParameters(smooth_quant_alpha=0.6)
             )
 
-            ov.save_model(quantized_model, Path(f"{ov_path}/tts_{language}_int8.xml"))
+            ov.save_model(quantized_model, Path(f"{ov_path}/tts_int8_{language}.xml"))
 
     def ov_model_init(self, ov_path=None, language = "ZH"):
         self.bert_model.ov_bert_model_init(ov_path, language=language)

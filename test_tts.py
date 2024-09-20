@@ -36,8 +36,10 @@ if speech_enhance:
         # Save the enhanced audio
         save_audio(output_file, enhanced, df_state.sr())
 
-#text = "我最近在学习machine learning，希望能够在未来的artificial intelligence领域有所建树。"
-text = "I've been learning machine learning recently and hope to make contributions in the field of artificial intelligence in the future."
+if lang == "ZH":
+    text = "我最近在学习machine learning，希望能够在未来的artificial intelligence领域有所建树。"
+elif lang == "EN":
+    text = "I've been learning machine learning recently and hope to make contributions in the field of artificial intelligence in the future."
 
 model = TTS(language=lang, device=device, use_int8=use_int8)
 speaker_ids = model.hps.data.spk2id
@@ -63,7 +65,7 @@ for i in range(loop_num):
             end = time.perf_counter()
     else:
         for speaker in speakers:
-            output_path = 'en_ov_{}.wav'.format(str(speaker))
+            output_path = 'ov_en_int8_{}.wav'.format(speaker) if use_int8 else 'en_ov_{}.wav'.format(speaker)
             start = time.perf_counter()
             model.tts_to_file(text, speaker_ids[speaker], output_path, speed=speed, use_ov=use_ov)
             if speech_enhance:
