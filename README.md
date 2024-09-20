@@ -85,6 +85,7 @@ pip install -r requirements.txt
 pip install openvino nncf
 python setup.py develop # or  pip install -e .
 python -m unidic download
+pip install deepfilternet #optional for enhancing speech
 ```
 
 ## Convert MeloTTS model to OpenVINO™ IR(Intermediate Representation) and testing:
