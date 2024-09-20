@@ -296,7 +296,7 @@ class TTS(nn.Module):
         Prepares a vision-text dataset for quantization.
         """
         dataset = CustomDataset(data_count=1, dummy_data=example_input)
-        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=8, pin_memory=True)
+        dataloader = torch.utils.data.DataLoader(dataset, batch_size=1, num_workers=0, pin_memory=True)
         calibration_data = self.prepare_calibration_data(dataloader, opt_init_steps)
         return calibration_data
     
