@@ -1,15 +1,30 @@
 from melo.api import TTS
 from pathlib import Path
 import time
-
+import argparse
 # Speed is adjustable
 speed = 1.0
-device = 'cpu' # or cuda:0
+
 
 use_ov = True  ## Used to control whether to use torch or openvino
 use_int8 = True
 speech_enhance = True
 lang = "EN" # or ZH
+
+
+# Parse args for ov device
+parser = argparse.ArgumentParser(description="Select inference devices for TTS and BERT")
+
+parser.add_argument("--tts_device", type=str, choices=["CPU", "GPU"], default="CPU",
+                    help="Select inference device for TTS: CPU or GPU")
+parser.add_argument("--bert_device", type=str, choices=["CPU", "GPU", "NPU"], default="CPU",
+                    help="Select inference device for BERT: CPU GPU or NPU")
+
+# Parse command-line arguments
+args = parser.parse_args()
+# ov device
+tts_device = args.tts_device
+bert_device = args.bert_device
 
 if speech_enhance:
     from df.enhance import enhance, init_df, load_audio, save_audio
@@ -39,9 +54,9 @@ if speech_enhance:
 if lang == "ZH":
     text = "我最近在学习machine learning，希望能够在未来的artificial intelligence领域有所建树。"
 elif lang == "EN":
-    text = "I've been learning machine learning recently and hope to make contributions in the field of artificial intelligence in the future."
+    text = "In this tutorial, we consider how to convert and optimize models on intel platforms"
 
-model = TTS(language=lang, device=device, use_int8=use_int8)
+model = TTS(language=lang, tts_device=args.tts_device, bert_device=args.bert_device, use_int8=use_int8)
 speaker_ids = model.hps.data.spk2id
 
 speakers = list(speaker_ids.keys())
@@ -61,7 +76,7 @@ for i in range(loop_num):
          for speaker in speakers:
             output_path = 'en_pth_{}.wav'.format(str(speaker))
             start = time.perf_counter()
-            model.tts_to_file(text, speaker_ids[speaker], output_path, speed=speed, use_ov = use_ov)
+            model.tts_to_file(text, speaker_ids[speaker], output_path, speed=speed*0.8, use_ov = use_ov)
             end = time.perf_counter()
     else:
         for speaker in speakers:

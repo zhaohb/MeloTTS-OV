@@ -7,11 +7,11 @@ import time
 from transformers import AutoTokenizer
 import torch
 
-device = 'CPU' # or cuda:0
+device = 'NPU' 
 language = 'EN'
 ov_path = f"tts_ov_{language}"
-ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
-ov_model_save_path = Path(f"{ov_path}/bert_static_{language}.xml")
+ov_model_path = Path(f"{ov_path}/bert_int8_{language}.xml")
+ov_model_save_path = Path(f"{ov_path}/bert_int8_static_{language}.xml")
 bert_static_shape = [1,32]
 def reshape_for_npu(model, bert_static_shape):
         # change dynamic shape to static shape
@@ -64,7 +64,7 @@ def main():
     model = core.read_model(ov_model_path)
     reshape_for_npu(model, bert_static_shape=bert_static_shape)
     compiled_model = core.compile_model(ov_model_save_path,device)
-    test_static_shape(compiled_model, "NPU")
+    test_static_shape(compiled_model, device=device)
     
     
 if __name__ == "__main__":

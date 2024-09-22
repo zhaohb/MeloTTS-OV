@@ -48,8 +48,9 @@ class ExportModel(PreTrainedModel):
         }
 
 class Bert():
-    def __init__(self, use_int8=False):
+    def __init__(self, use_int8=False, device="CPU"):
         self.use_int8=use_int8
+        self.device  = device
         
     
     def save_tokenizer(self, tokenizer, out_dir):
@@ -163,18 +164,24 @@ class Bert():
 
             ov.save_model(quantized_model, Path(f"{ov_path}/bert_int8_{language}.xml"))
         
-    def ov_bert_model_init(self, ov_path=None, language = "ZH"):
+    def ov_bert_model_init(self, ov_path=None, bert_device = "CPU", language = "ZH"):
         core = ov.Core()
-        if self.use_int8:
-            ov_model_path = Path(f"{ov_path}/bert_int8_{language}.xml")
-        else:
-            ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
+        if bert_device != "NPU":
+            if self.use_int8:
+                ov_model_path = Path(f"{ov_path}/bert_int8_{language}.xml")
+            else:
+                ov_model_path = Path(f"{ov_path}/bert_{language}.xml")
+        # NPU must specify static model
+        if bert_device == "NPU" and self.use_int8:
+            ov_model_path = Path(f"{ov_path}/bert_int8_static_{language}.xml")
         self.bert_model = core.read_model(Path(ov_model_path))
-        self.bert_compiled_model = core.compile_model(self.bert_model, 'CPU')
+        self.bert_compiled_model = core.compile_model(self.bert_model, bert_device)
         self.bert_request = self.bert_compiled_model.create_infer_request()
                 
         self.bert_tokenizer = AutoTokenizer.from_pretrained(ov_path, trust_remote_code=True)
         self.bert_config = AutoConfig.from_pretrained(ov_path, trust_remote_code=True)
+        print(f"init {ov_model_path}")
+    
         
     def ov_bert_infer(self, input_ids=None, token_type_ids=None, attention_mask=None):
         inputs_dict = {}
@@ -182,7 +189,28 @@ class Bert():
         inputs_dict['token_type_ids'] = token_type_ids
         inputs_dict['attention_mask'] = attention_mask
         
-        self.bert_request.start_async(inputs_dict, share_inputs=True)
+        """
+        Reshape model to static:
+        If using device NPU (on Meteor Lake) to run the BERT model, it is necessary
+        to reshape the model to a static size and pad the input accordingly.
+        """
+        def pad_tensor(input_tensor, pad_length=32):      
+            pad_size = pad_length - input_tensor.shape[1]
+            if pad_size > 0:
+                # Pad with zeros on the right side using torch.nn.functional.pad
+                return torch.nn.functional.pad(input_tensor, (0, pad_size), 'constant', 0)
+            elif pad_size < 0:
+                # Truncate the input tensor to the specified pad_length
+                return input_tensor[:, :pad_length]
+            else:
+                return input_tensor
+        if self.device == "NPU":
+            padded_inputs = {}
+            for key, value in inputs_dict.items():
+                padded_inputs[key] = pad_tensor(value)
+
+
+        self.bert_request.start_async(padded_inputs if self.device=="NPU" else inputs_dict , share_inputs=True)
         self.bert_request.wait()
         bert_output = (self.bert_request.get_tensor("hidden_states").data.copy())
 
@@ -190,17 +218,19 @@ class Bert():
 class TTS(nn.Module):
     def __init__(self, 
                 language,
-                device='auto',
+                torch_device = 'cpu',
+                tts_device='CPU',
+                bert_device = 'CPU',
                 use_hf=True,
                 use_int8=False,
                 config_path=None,
                 ckpt_path=None):
         super().__init__()
-        if device == 'auto':
-            device = 'cpu'
-            if torch.cuda.is_available(): device = 'cuda'
-            if torch.backends.mps.is_available(): device = 'mps'
-        if 'cuda' in device:
+        if torch_device == 'auto':
+            torch_device = 'cpu'
+            if torch.cuda.is_available(): torch_device = 'cuda'
+            if torch.backends.mps.is_available(): torch_device = 'mps'
+        if 'cuda' in torch_device:
             assert torch.cuda.is_available()
 
         # config_path = 
@@ -218,16 +248,16 @@ class TTS(nn.Module):
             num_tones=num_tones,
             num_languages=num_languages,
             **hps.model,
-        ).to(device)
+        ).to(torch_device)
 
         model.eval()
         self.model = model
         self.symbol_to_id = {s: i for i, s in enumerate(symbols)}
         self.hps = hps
-        self.device = device
+        self.device = torch_device
     
         # load state_dict
-        checkpoint_dict = load_or_download_model(language, device, use_hf=use_hf, ckpt_path=ckpt_path)
+        checkpoint_dict = load_or_download_model(language, torch_device, use_hf=use_hf, ckpt_path=ckpt_path)
         self.model.load_state_dict(checkpoint_dict['model'], strict=True)
         
         language = language.split('_')[0]
@@ -235,8 +265,15 @@ class TTS(nn.Module):
         if self.language == "EN":
             nltk.download('averaged_perceptron_tagger_eng')
         
-        self.bert_model = Bert(use_int8=use_int8)
+         # ov device
+        self.tts_device = tts_device
+        self.bert_device = bert_device
+
+        self.bert_model = Bert(use_int8=use_int8, device = self.bert_device)
         self.use_int8 =use_int8
+        
+       
+
 
     @staticmethod
     def audio_numpy_concat(segment_data_list, sr, speed=1.):
@@ -384,7 +421,7 @@ class TTS(nn.Module):
             ov.save_model(quantized_model, Path(f"{ov_path}/tts_int8_{language}.xml"))
 
     def ov_model_init(self, ov_path=None, language = "ZH"):
-        self.bert_model.ov_bert_model_init(ov_path, language=language)
+        self.bert_model.ov_bert_model_init(ov_path, bert_device = self.bert_device, language=language)
         
         self.core = ov.Core()
         if self.use_int8:
@@ -393,7 +430,7 @@ class TTS(nn.Module):
             ov_model_path = Path(f"{ov_path}/tts_{language}.xml")
         print(f"ov_path : {ov_model_path}")
         self.tts_model = self.core.read_model(Path(ov_model_path))
-        self.tts_compiled_model = self.core.compile_model(self.tts_model, 'CPU')
+        self.tts_compiled_model = self.core.compile_model(self.tts_model, self.tts_device)
         self.tts_request = self.tts_compiled_model.create_infer_request()
 
     def ov_infer(self, x_tst=None, x_tst_lengths=None, speakers=None, tones=None, lang_ids=None, bert=None, ja_bert=None, sdp_ratio=0.2, noise_scale=0.6, noise_scale_w=0.8, speed=1.0):
