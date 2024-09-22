@@ -79,7 +79,7 @@ This implementation is based on [TTS](https://github.com/coqui-ai/TTS), [VITS](h
 * TTS and Bert model support int8 quantize.
 
 ### 2024/09/22
-* Enable BERT for NPU on Meteor Lake architecture
+* Enable BERT for NPU on Meteor Lake
 
 
 ## Install MeloTTS with OpenVINO™
