@@ -19,12 +19,15 @@ parser.add_argument("--tts_device", type=str, choices=["CPU", "GPU"], default="C
                     help="Select inference device for TTS: CPU or GPU")
 parser.add_argument("--bert_device", type=str, choices=["CPU", "GPU", "NPU"], default="CPU",
                     help="Select inference device for BERT: CPU GPU or NPU")
+parser.add_argument("--language", type=str, default="EN",
+                    help="Specify the language for the models: ZH or EN")
 
 # Parse command-line arguments
 args = parser.parse_args()
 # ov device
 tts_device = args.tts_device
 bert_device = args.bert_device
+lang = args.language
 
 if speech_enhance:
     from df.enhance import enhance, init_df, load_audio, save_audio
@@ -52,9 +55,9 @@ if speech_enhance:
         save_audio(output_file, enhanced, df_state.sr())
 
 if lang == "ZH":
-    text = "我最近在学习machine learning，希望能够在未来的artificial intelligence领域有所建树。"
+    text = "我们探讨如何在 Intel 平台上转换和优化artificial intelligence 模型"
 elif lang == "EN":
-    text = "In this tutorial, we consider how to convert and optimize models on intel platforms"
+    text = "For Intel platforms, we explore the methods for converting and optimizing models."
 
 model = TTS(language=lang, tts_device=args.tts_device, bert_device=args.bert_device, use_int8=use_int8)
 speaker_ids = model.hps.data.spk2id
@@ -76,7 +79,7 @@ for i in range(loop_num):
          for speaker in speakers:
             output_path = 'en_pth_{}.wav'.format(str(speaker))
             start = time.perf_counter()
-            model.tts_to_file(text, speaker_ids[speaker], output_path, speed=speed*0.8, use_ov = use_ov)
+            model.tts_to_file(text, speaker_ids[speaker], output_path, speed=speed*0.75, use_ov = use_ov)
             end = time.perf_counter()
     else:
         for speaker in speakers:
