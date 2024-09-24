@@ -6,3 +6,6 @@ tts_ov_En/bert.bin filter=lfs diff=lfs merge=lfs -text
 tts_ov_ZH/bert_int8_ZH.bin filter=lfs diff=lfs merge=lfs -text
 tts_ov_ZH/tt_int8_ZH.bin filter=lfs diff=lfs merge=lfs -text
 tts_ov_ZH/tts_int8_ZH.bin filter=lfs diff=lfs merge=lfs -text
+tts_ov_EN/bert_EN.bin filter=lfs diff=lfs merge=lfs -text
+tts_ov_EN/bert_int8_EN.bin filter=lfs diff=lfs merge=lfs -text
+tts_ov_EN/tts_int8_EN.bin filter=lfs diff=lfs merge=lfs -text
