@@ -1,0 +1,5 @@
+tts_ov_ZH/tts_ZH.bin filter=lfs diff=lfs merge=lfs -text
+tts_ov_ZH/bert_ZH.bin filter=lfs diff=lfs merge=lfs -text
+tts_ov_EN/tts_EN.bin filter=lfs diff=lfs merge=lfs -text
+tts_ov_EN/tts_EN.xml filter=lfs diff=lfs merge=lfs -text
+tts_ov_En/bert.bin filter=lfs diff=lfs merge=lfs -text
