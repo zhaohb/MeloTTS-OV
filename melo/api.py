@@ -492,7 +492,7 @@ class TTS(nn.Module):
                                           sdp_ratio=sdp_ratio, 
                                           noise_scale=noise_scale, 
                                           noise_scale_w=noise_scale_w, 
-                                          speed=1.0)
+                                          speed=speed)
                 else:
                     audio = self.model(
                             x_tst,
