@@ -120,13 +120,6 @@ class Bert():
             example_input = example_input,
         )
         
-        get_input_names = lambda: ["input_ids", "token_type_ids", "attention_mask"]
-        for input, input_name in zip(ov_model.inputs, get_input_names()):
-            input.get_tensor().set_names({input_name})
-        outputs_name = ['hidden_states']
-        for output, output_name in zip(ov_model.outputs, outputs_name):
-            output.get_tensor().set_names({output_name})
-        
         """
         reshape model
         Set the batch size of all input tensors to 1 to facilitate the use of the C++ infer
@@ -212,7 +205,7 @@ class Bert():
 
         self.bert_request.start_async(padded_inputs if self.device=="NPU" else inputs_dict , share_inputs=True)
         self.bert_request.wait()
-        bert_output = (self.bert_request.get_tensor("hidden_states").data.copy())
+        bert_output = self.bert_request.get_output_tensor(0).data.copy()
 
         return bert_output
 class TTS(nn.Module):
